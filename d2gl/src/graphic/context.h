@@ -117,11 +117,15 @@ class Context {
 	GLuint m_index_buffer;
 	GLuint m_vertex_array;
 	GLuint m_vertex_buffer;
+	GLuint m_vertex_mod_buffer;
 	uint32_t m_frame_index = 0;
 
 	bool m_delay_push = false;
+	bool m_ingame_push = false;
+	uint32_t m_ingame_submitted = 0;
 	Vertices<Vertex, MAX_VERTICES, MAX_FRAME_LATENCY> m_vertices;
 	Vertices<VertexMod, MAX_VERTICES_MOD, MAX_FRAME_LATENCY> m_vertices_mod;
+	Vertices<VertexMod, MAX_VERTICES_MOD, MAX_FRAME_LATENCY> m_vertices_ingame;
 	Vertices<VertexMod, MAX_VERTICES_MOD, 1> m_vertices_late;
 	VertexParams m_vertex_params;
 
@@ -190,8 +194,10 @@ public:
 	void drawQuad(int8_t flag_x = 0, int8_t flag_y = 0, int16_t tex_id = 0);
 
 	inline void toggleDelayPush(bool delay) { m_delay_push = delay; }
+	inline void toggleInGamePush(bool ingame) { m_ingame_push = ingame; }
 	void pushObject(const std::unique_ptr<Object>& object);
 	void appendDelayedObjects();
+	void flushInGameHD();
 
 	inline void setVertexColor(uint32_t color) { m_vertex_params.color = color; }
 	inline void setVertexTexShift(uint8_t shift) { m_vertex_params.tex_shift = shift; }
