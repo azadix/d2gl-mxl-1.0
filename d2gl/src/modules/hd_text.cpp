@@ -865,7 +865,17 @@ void HDText::drawRectFrame()
 	m_object_bg->setColor(0x333333FF, 2);
 	m_object_bg->setFlags(4, 3);
 	m_object_bg->setExtra(size);
+
+	// D2Win box frames (filter rows, dialogs) must stay in the game pass so later
+	// panels/modals cover them. Overlay would draw every row border on top of the UI.
+	const bool ingame_hd = (App.game.screen == GameScreen::InGame && App.game.draw_stage != DrawStage::Map && App.game.draw_stage != DrawStage::Map2);
+	if (ingame_hd)
+		App.context->toggleInGamePush(true);
 	App.context->pushObject(m_object_bg);
+	if (ingame_hd) {
+		App.context->toggleInGamePush(false);
+		App.context->flushInGameHD();
+	}
 }
 
 void HDText::loadUIImage()
