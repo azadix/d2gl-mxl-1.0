@@ -154,6 +154,10 @@ Context::Context()
 	glGenBuffers(1, &m_vertex_buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, m_vertex_buffer);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(m_vertices.data[0]), NULL, GL_DYNAMIC_DRAW);
+
+	glGenBuffers(1, &m_vertex_mod_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, m_vertex_mod_buffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(m_vertices_ingame.data[0]), NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	glGenBuffers(1, &m_pixel_buffer);
@@ -338,6 +342,7 @@ Context::~Context()
 
 	glDeleteBuffers(1, &m_pixel_buffer);
 	glDeleteBuffers(1, &m_vertex_buffer);
+	glDeleteBuffers(1, &m_vertex_mod_buffer);
 	glDeleteBuffers(1, &m_index_buffer);
 	glDeleteVertexArrays(1, &m_vertex_array);
 
@@ -364,8 +369,15 @@ void Context::renderThread(void* context)
 		if (ctx->m_current_shader != App.shader.selected)
 			ctx->onShaderChange();
 
+		glBindBuffer(GL_ARRAY_BUFFER, ctx->m_vertex_buffer);
 		if (cmd->m_vertex_count)
 			glBufferSubData(GL_ARRAY_BUFFER, 0, cmd->m_vertex_count * sizeof(Vertex), ctx->m_vertices.data[frame_index].data());
+
+		if (cmd->m_vertex_mod_ingame_count) {
+			glBindBuffer(GL_ARRAY_BUFFER, ctx->m_vertex_mod_buffer);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, cmd->m_vertex_mod_ingame_count * sizeof(VertexMod), ctx->m_vertices_ingame.data[frame_index].data());
+			glBindBuffer(GL_ARRAY_BUFFER, ctx->m_vertex_buffer);
+		}
 
 		if (cmd->m_tex_update_queue.count) {
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, ctx->m_pixel_buffer);
@@ -402,6 +414,19 @@ void Context::renderThread(void* context)
 				case CommandType::DrawIndexed:
 					if (command->draw.count > 0)
 						glDrawElementsBaseVertex(GL_TRIANGLES, command->draw.count, GL_UNSIGNED_INT, 0, command->draw.start);
+					break;
+				case CommandType::DrawModInGame:
+					if (command->draw.count > 0) {
+						FrameBuffer::setDrawBuffers(1);
+						ctx->bindPipeline(ctx->m_mod_pipeline);
+						glBindBuffer(GL_ARRAY_BUFFER, ctx->m_vertex_mod_buffer);
+						VertexMod::bindingDescription();
+						glDrawElementsBaseVertex(GL_TRIANGLES, command->draw.count, GL_UNSIGNED_INT, 0, command->draw.start);
+						glBindBuffer(GL_ARRAY_BUFFER, ctx->m_vertex_buffer);
+						Vertex::bindingDescription();
+						if (ctx->m_game_framebuffer)
+							FrameBuffer::setDrawBuffers(ctx->m_game_framebuffer->getAttachmentCount());
+					}
 					break;
 				case CommandType::PreFx:
 					ctx->m_prefx_texture->fillFromBuffer(ctx->m_game_framebuffer);
@@ -744,6 +769,11 @@ void Context::beginFrame()
 	m_vertices_mod.count = 0;
 	m_vertices_mod.ptr = m_vertices_mod.data[m_frame_index].data();
 
+	m_ingame_push = false;
+	m_ingame_submitted = 0;
+	m_vertices_ingame.count = 0;
+	m_vertices_ingame.ptr = m_vertices_ingame.data[m_frame_index].data();
+
 	m_delay_push = false;
 	m_vertices_late.count = 0;
 	m_vertices_late.ptr = m_vertices_late.data[0].data();
@@ -777,6 +807,8 @@ void Context::presentFrame()
 		m_command_buffer[m_frame_index].m_vertex_mod_count = m_vertices_mod.count;
 		m_frame.drawcall_count++;
 	}
+	if (m_vertices_ingame.count)
+		m_command_buffer[m_frame_index].m_vertex_mod_ingame_count = m_vertices_ingame.count;
 	option::Menu::instance().check();
 
 	ReleaseSemaphore(m_semaphore_cpu[m_frame_index], 1, NULL);
@@ -870,6 +902,11 @@ void Context::pushObject(const std::unique_ptr<Object>& object)
 
 		m_vertices_late.ptr += 4;
 		m_vertices_late.count += 4;
+	} else if (m_ingame_push) {
+		memcpy(m_vertices_ingame.ptr, vertices, sizeof(VertexMod) * 4);
+
+		m_vertices_ingame.ptr += 4;
+		m_vertices_ingame.count += 4;
 	} else {
 		memcpy(m_vertices_mod.ptr, vertices, sizeof(VertexMod) * 4);
 
@@ -877,6 +914,18 @@ void Context::pushObject(const std::unique_ptr<Object>& object)
 		m_vertices_mod.count += 4;
 	}
 	m_frame.vertex_count += 4;
+}
+
+void Context::flushInGameHD()
+{
+	if (m_vertices_ingame.count <= m_ingame_submitted)
+		return;
+
+	flushVertices();
+	m_command_buffer[m_frame_index].drawModInGame(m_ingame_submitted, m_vertices_ingame.count - m_ingame_submitted);
+	m_command_buffer[m_frame_index].pushCommand(CommandType::SetBlendState, m_current_blend_index);
+	m_ingame_submitted = m_vertices_ingame.count;
+	m_frame.drawcall_count++;
 }
 
 void Context::appendDelayedObjects()

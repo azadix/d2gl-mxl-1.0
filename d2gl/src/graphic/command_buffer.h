@@ -9,6 +9,7 @@ enum class CommandType {
 	SetBlendState,
 	DrawIndexed,
 	PreFx,
+	DrawModInGame,
 	Submit,
 	TakeScreenShot,
 };
@@ -72,6 +73,7 @@ class CommandBuffer {
 	TexUpdateQueue m_tex_update_queue;
 	uint32_t m_vertex_count = 0;
 	uint32_t m_vertex_mod_count = 0;
+	uint32_t m_vertex_mod_ingame_count = 0;
 	GameScreen m_screen = GameScreen::InGame;
 
 	bool m_resized = false;
@@ -94,6 +96,7 @@ public:
 
 	void pushCommand(CommandType type, uint32_t index = 0);
 	void drawIndexed(uint32_t start, uint32_t count);
+	void drawModInGame(uint32_t start, uint32_t count);
 	void resize();
 
 	void colorUpdate(UBOType type, const void* data);

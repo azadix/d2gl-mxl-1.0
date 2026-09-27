@@ -282,10 +282,21 @@ bool HDText::drawText(const wchar_t* str, int x, int y, uint32_t color, uint32_t
 			case 2: font->setOpacity(0.75f); break;
 		}
 	}
+	// Median XL (D2Sigma) draws ground names as DrawSolidRect + DrawNormalText on the UI pass.
+	// Keep that HD text in the game framebuffer so later inventory/HUD sprites cover it.
+	const bool ingame_hd = (App.game.screen == GameScreen::InGame && App.game.draw_stage != DrawStage::Map && App.game.draw_stage != DrawStage::Map2 && !map_text);
+	if (ingame_hd)
+		App.context->toggleInGamePush(true);
+
 	font->setMasking(m_masking);
 	font->setAlign(centered ? TextAlign::Center : TextAlign::Left);
 	font->drawText(str, pos, text_color);
 	font->setOpacity(1.0f);
+
+	if (ingame_hd) {
+		App.context->toggleInGamePush(false);
+		App.context->flushInGameHD();
+	}
 
 	if (map_text) {
 		App.context->toggleDelayPush(false);
@@ -326,7 +337,9 @@ bool HDText::drawFramedText(const wchar_t* str, int x, int y, uint32_t color, ui
 	const auto text_color = g_text_colors.at(getColor(color));
 	glm::vec2 pos, padding, box_size, size;
 
-	if (unit && unit->dwType == d2::UnitType::Item) {
+	const bool ground_item = (unit && unit->dwType == d2::UnitType::Item);
+
+	if (ground_item) {
 		font = getFont(16);
 		size = font->getTextSize(str);
 		line_count = font->getLineCount();
@@ -392,7 +405,10 @@ bool HDText::drawFramedText(const wchar_t* str, int x, int y, uint32_t color, ui
 	else if (pos.y < margin)
 		pos.y = margin;
 
-	App.context->toggleDelayPush(true);
+	if (ground_item)
+		App.context->toggleInGamePush(true);
+	else
+		App.context->toggleDelayPush(true);
 	m_object_bg->setPosition(pos);
 	m_object_bg->setSize(box_size);
 	m_object_bg->setColor(m_bg_color, 1);
@@ -404,7 +420,11 @@ bool HDText::drawFramedText(const wchar_t* str, int x, int y, uint32_t color, ui
 	font->setMasking(false);
 	font->setAlign(TextAlign::Center);
 	font->drawText(str, pos + padding, text_color, true);
-	App.context->toggleDelayPush(false);
+	if (ground_item) {
+		App.context->toggleInGamePush(false);
+		App.context->flushInGameHD();
+	} else
+		App.context->toggleDelayPush(false);
 
 	return true;
 }
@@ -463,6 +483,10 @@ bool HDText::drawRectangledText(const wchar_t* str, int x, int y, uint32_t rect_
 		m_object_bg->setExtra({ ext_normal, 1.0f - ext_normal });
 	}
 
+	const bool item_label = (rect_transparency != 2);
+	if (item_label)
+		App.context->toggleInGamePush(true);
+
 	m_object_bg->setPosition(back_pos);
 	m_object_bg->setSize(size + padding * 2.0f);
 	m_object_bg->setColor(bg_color, 1);
@@ -472,6 +496,11 @@ bool HDText::drawRectangledText(const wchar_t* str, int x, int y, uint32_t rect_
 	font->setMasking(false);
 	font->setAlign(TextAlign::Center);
 	font->drawText(str, text_pos + padding, text_color, true);
+
+	if (item_label) {
+		App.context->toggleInGamePush(false);
+		App.context->flushInGameHD();
+	}
 
 	return true;
 }
@@ -571,7 +600,14 @@ bool HDText::drawSolidRect(int left, int top, int right, int bottom, uint32_t co
 	} else
 		m_object_bg->setFlags(2);
 
+	const bool ingame_hd = (App.game.draw_stage != DrawStage::Map && App.game.draw_stage != DrawStage::Map2);
+	if (ingame_hd)
+		App.context->toggleInGamePush(true);
 	App.context->pushObject(m_object_bg);
+	if (ingame_hd) {
+		App.context->toggleInGamePush(false);
+		App.context->flushInGameHD();
+	}
 
 	return true;
 }

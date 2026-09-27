@@ -24,6 +24,7 @@ void CommandBuffer::reset()
 	m_tex_update_queue.data_offset = 0;
 	m_vertex_count = 0;
 	m_vertex_mod_count = 0;
+	m_vertex_mod_ingame_count = 0;
 	m_tex_update.bit = 0;
 
 	m_screen = App.game.screen;
@@ -49,6 +50,14 @@ void CommandBuffer::drawIndexed(uint32_t start, uint32_t count)
 {
 	m_vertex_count += count;
 	m_command->type = CommandType::DrawIndexed;
+	m_command->draw.start = start;
+	m_command->draw.count = count / 4 * 6;
+	next();
+}
+
+void CommandBuffer::drawModInGame(uint32_t start, uint32_t count)
+{
+	m_command->type = CommandType::DrawModInGame;
 	m_command->draw.start = start;
 	m_command->draw.count = count / 4 * 6;
 	next();
