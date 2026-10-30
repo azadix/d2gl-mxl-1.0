@@ -56,6 +56,12 @@ class MotionPrediction {
 
 	D2DrawFn m_text_fn = D2DrawFn::None;
 	D2DrawFn m_draw_fn = D2DrawFn::None;
+	bool m_alt_item_offset_applied = false;
+	bool m_loot_nameplate_valid = false;
+	int m_loot_nameplate_l = 0;
+	int m_loot_nameplate_t = 0;
+	int m_loot_nameplate_r = 0;
+	int m_loot_nameplate_b = 0;
 
 	std::array<ParticleMotion, 512> m_particles;
 	uint32_t m_last_particle_index = 0;
@@ -80,7 +86,7 @@ public:
 
 	glm::ivec2 drawImage(int x, int y, D2DrawFn fn, uint32_t gamma = 0, int draw_mode = 0);
 	glm::ivec2 drawLine(int start_x, int start_y);
-	glm::ivec2 drawSolidRect();
+	glm::ivec2 drawSolidRect(int left, int top, int right = 0, int bottom = 0);
 	glm::ivec2 drawText(const wchar_t* str, int x, int y, D2DrawFn fn);
 
 	void unitHoverTextMotion();
@@ -91,6 +97,10 @@ public:
 private:
 	void setUnitMotion(UnitMotion* unit_motion, int32_t delta);
 	glm::ivec2 getUnitOffset(UnitMotion* unit_motion);
+	bool isWorldAnchoredUiLabel(int x, int y, const wchar_t* str = nullptr);
+	bool isHudMotionStage();
+	bool isLootNameplateRect(int left, int top, int right, int bottom);
+	bool textNearLootNameplate(int x, int y);
 
 	inline bool isAvailable() { return m_active && App.game.screen == GameScreen::InGame; }
 };

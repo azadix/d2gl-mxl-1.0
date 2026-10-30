@@ -42,6 +42,7 @@
 #include "d2/funcs.h"
 #include "d2/stubs.h"
 #include "helpers.h"
+#include "modules/hd_text.h"
 
 #include <detours/detours.h>
 
@@ -112,6 +113,8 @@ void MotionPrediction::update()
 
 	m_perspective = d2::isPerspective();
 	m_global_offset = getUnitOffset(&m_player_motion);
+	m_alt_item_offset_applied = false;
+	m_loot_nameplate_valid = false;
 }
 
 glm::ivec2 MotionPrediction::getGlobalOffset(bool skip)
@@ -147,6 +150,8 @@ glm::ivec2 MotionPrediction::drawImage(int x, int y, D2DrawFn fn, uint32_t gamma
 		return pos;
 
 	if (fn == D2DrawFn::Shadow || fn == D2DrawFn::ImageFast) {
+		if (isHudMotionStage())
+			return pos;
 		if (glm::max(abs(pos.x - m_player_motion.screen_pos.x), abs(pos.y - m_player_motion.screen_pos.y)) < 16)
 			return pos;
 		else {
@@ -161,6 +166,8 @@ glm::ivec2 MotionPrediction::drawImage(int x, int y, D2DrawFn fn, uint32_t gamma
 	}
 
 	if (d2::currently_drawing_unit) {
+		if (isHudMotionStage())
+			return pos;
 		if (d2::currently_drawing_unit == d2::getPlayerUnit()) {
 			m_player_motion.screen_pos = pos;
 			return pos;
@@ -225,9 +232,12 @@ glm::ivec2 MotionPrediction::drawLine(int start_x, int start_y)
 	return particle.offset;
 }
 
-glm::ivec2 MotionPrediction::drawSolidRect()
+glm::ivec2 MotionPrediction::drawSolidRect(int left, int top, int right, int bottom)
 {
-	if (isAvailable() && m_text_fn == D2DrawFn::NormalText) {
+	if (!isAvailable())
+		return { 0, 0 };
+
+	if (m_text_fn == D2DrawFn::NormalText && !isHudMotionStage()) {
 		if (d2::headsup_text_unit && m_player_motion.unit != d2::headsup_text_unit) {
 			if (d2::headsup_text_unit->dwType == d2::UnitType::Monster) {
 				const uint32_t type_id = d2::getUnitID(d2::headsup_text_unit) | ((uint8_t)d2::headsup_text_unit->dwType << 24);
@@ -236,6 +246,15 @@ glm::ivec2 MotionPrediction::drawSolidRect()
 			}
 			return m_global_offset;
 		}
+	}
+
+	if (isLootNameplateRect(left, top, right, bottom)) {
+		m_loot_nameplate_l = left;
+		m_loot_nameplate_t = top;
+		m_loot_nameplate_r = right;
+		m_loot_nameplate_b = bottom;
+		m_loot_nameplate_valid = true;
+		return m_global_offset;
 	}
 
 	return { 0, 0 };
@@ -247,7 +266,7 @@ glm::ivec2 MotionPrediction::drawText(const wchar_t* str, int x, int y, D2DrawFn
 	if (!isAvailable() || !str)
 		return pos;
 
-	if (fn == m_text_fn) {
+	if (fn == m_text_fn && !isHudMotionStage()) {
 		if (d2::headsup_text_unit && m_player_motion.unit != d2::headsup_text_unit) {
 			if (d2::headsup_text_unit->dwType == d2::UnitType::Monster) {
 				const uint32_t type_id = d2::getUnitID(d2::headsup_text_unit) | ((uint8_t)d2::headsup_text_unit->dwType << 24);
@@ -255,14 +274,35 @@ glm::ivec2 MotionPrediction::drawText(const wchar_t* str, int x, int y, D2DrawFn
 				pos += unit_offset;
 			}
 			pos -= m_global_offset;
+			return pos;
 		}
 	}
 
 	if (fn == D2DrawFn::FramedText) {
 		const auto unit = d2::getSelectedUnit();
 
-		if (unit && m_active) {
+		if (unit && m_active)
 			pos -= m_global_offset;
+		return pos;
+	}
+
+	// DrawRectangledText: offset unless altItemsTextMotion already shifted the rect.
+	if (fn == D2DrawFn::RectangledText) {
+		if (m_alt_item_offset_applied)
+			m_alt_item_offset_applied = false;
+		else
+			pos -= m_global_offset;
+		return pos;
+	}
+
+	if (fn == D2DrawFn::NormalText || fn == D2DrawFn::NormalTextEx) {
+		const bool loot_name = textNearLootNameplate(x, y);
+		const bool world_label = (App.game.draw_stage == DrawStage::World) && isWorldAnchoredUiLabel(x, y, str);
+		if (loot_name || world_label) {
+			if (m_alt_item_offset_applied)
+				m_alt_item_offset_applied = false;
+			else
+				pos -= m_global_offset;
 		}
 	}
 
@@ -316,6 +356,79 @@ void MotionPrediction::altItemsTextMotion()
 	*y1 -= m_global_offset.y;
 	*x2 -= m_global_offset.x;
 	*y2 -= m_global_offset.y;
+	m_alt_item_offset_applied = true;
+}
+
+bool MotionPrediction::isHudMotionStage()
+{
+	return App.game.draw_stage == DrawStage::HUD
+		|| App.game.draw_stage == DrawStage::Map
+		|| App.game.draw_stage == DrawStage::Map2
+		|| App.game.draw_stage == DrawStage::Cursor
+		|| App.game.draw_stage == DrawStage::CursorItem;
+}
+
+bool MotionPrediction::isLootNameplateRect(int left, int top, int right, int bottom)
+{
+	if (d2::isEscMenuOpen())
+		return false;
+	if (App.game.draw_stage != DrawStage::World && App.game.draw_stage != DrawStage::UI && App.game.draw_stage != DrawStage::HUD)
+		return false;
+
+	const int width = right - left;
+	const int height = bottom - top;
+	if (height < 10 || height > 56 || width < 16 || width > 480)
+		return false;
+	if (width > (int)App.game.size.x / 2)
+		return false;
+	// Hireling / summon HP under the left portraits.
+	if (height <= 24 && width <= 100 && left < 130)
+		return false;
+	// Square-ish black plate behind merc/minion portraits (left HUD stack).
+	// Loot nameplates are wide; portrait backing is about as tall as it is wide.
+	if (left < 180 && top < 450 && width <= 110 && height >= 28 && width <= height + 20)
+		return false;
+
+	const int shift = *d2::screen_shift;
+	const int mid_x = (int)App.game.size.x / 2;
+	if (shift == SCREENPANEL_BOTH)
+		return false;
+	if (shift == SCREENPANEL_LEFT && left < mid_x)
+		return false;
+	if (shift == SCREENPANEL_RIGHT && left > mid_x)
+		return false;
+
+	return true;
+}
+
+bool MotionPrediction::textNearLootNameplate(int x, int y)
+{
+	if (!m_loot_nameplate_valid)
+		return false;
+	return x >= m_loot_nameplate_l - 24 && x <= m_loot_nameplate_r + 24
+		&& y >= m_loot_nameplate_t - 8 && y <= m_loot_nameplate_b + 28;
+}
+
+bool MotionPrediction::isWorldAnchoredUiLabel(int x, int y, const wchar_t* str)
+{
+	UNREFERENCED_PARAMETER(str);
+
+	if (d2::isEscMenuOpen())
+		return false;
+
+	if (App.game.draw_stage != DrawStage::World)
+		return false;
+
+	const int shift = *d2::screen_shift;
+	const int mid_x = (int)App.game.size.x / 2;
+	if (shift == SCREENPANEL_BOTH)
+		return false;
+	if (shift == SCREENPANEL_LEFT && x < mid_x)
+		return false;
+	if (shift == SCREENPANEL_RIGHT && x > mid_x)
+		return false;
+
+	return true;
 }
 
 void MotionPrediction::setUnitMotion(UnitMotion* unit_motion, int32_t delta)

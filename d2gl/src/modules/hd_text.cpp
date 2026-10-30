@@ -395,15 +395,19 @@ bool HDText::drawFramedText(const wchar_t* str, int x, int y, uint32_t color, ui
 	if (centered || line_count > 1)
 		pos.x -= size.x / 2.0f;
 
-	const float margin = 5.0f;
-	if (pos.x + box_size.x > (float)App.game.size.x - margin)
-		pos.x = (float)App.game.size.x - box_size.x - margin;
-	else if (pos.x < margin)
-		pos.x = margin;
-	if (pos.y + box_size.y > (float)App.game.size.y - margin)
-		pos.y = (float)App.game.size.y - box_size.y - margin;
-	else if (pos.y < margin)
-		pos.y = margin;
+	// Ground-item labels must keep the motion-predicted world position. Clamping
+	// to the screen edge makes them pop while the camera is predicted.
+	if (!ground_item) {
+		const float margin = 5.0f;
+		if (pos.x + box_size.x > (float)App.game.size.x - margin)
+			pos.x = (float)App.game.size.x - box_size.x - margin;
+		else if (pos.x < margin)
+			pos.x = margin;
+		if (pos.y + box_size.y > (float)App.game.size.y - margin)
+			pos.y = (float)App.game.size.y - box_size.y - margin;
+		else if (pos.y < margin)
+			pos.y = margin;
+	}
 
 	const bool ingame_hd = ground_item && useInGamePass();
 	if (ingame_hd)

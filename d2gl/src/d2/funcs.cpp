@@ -315,7 +315,7 @@ void __stdcall drawShadowHooked(CellContext* cell, int x, int y)
 
 void __stdcall drawSolidRectExHooked(int left, int top, int right, int bottom, uint32_t color, int draw_mode)
 {
-	auto offset = modules::MotionPrediction::Instance().drawSolidRect();
+	auto offset = modules::MotionPrediction::Instance().drawSolidRect(left, top, right, bottom);
 	if (!modules::HDText::Instance().drawSolidRect(left - offset.x, top - offset.y, right - offset.x, bottom - offset.y, color, draw_mode))
 		drawSolidRectEx(left - offset.x, top - offset.y, right - offset.x, bottom - offset.y, color, draw_mode);
 
@@ -400,7 +400,10 @@ void __fastcall drawFramedTextHooked(const wchar_t* str, int x, int y, uint32_t 
 
 void __fastcall drawRectangledTextHooked(const wchar_t* str, int x, int y, uint32_t rect_color, uint32_t rect_transparency, uint32_t color)
 {
-	const auto pos = modules::MotionPrediction::Instance().drawText(str, x, y, D2DrawFn::RectangledText);
+	glm::ivec2 pos = { x, y };
+	// transparency 2 = stats-panel popup (screen-fixed). 1 and 5 = ground item labels.
+	if (rect_transparency != 2)
+		pos = modules::MotionPrediction::Instance().drawText(str, x, y, D2DrawFn::RectangledText);
 	if (!modules::HDText::Instance().drawRectangledText(str, pos.x, pos.y, rect_transparency, color))
 		drawRectangledText(str, pos.x, pos.y, rect_color, rect_transparency, color);
 }
