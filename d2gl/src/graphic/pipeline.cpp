@@ -148,6 +148,7 @@ BlendFactors Pipeline::blendFactor(BlendType type)
 		case BlendType::Zero_SColor: return { GL_ZERO, GL_SRC_COLOR, GL_ZERO, GL_SRC_COLOR };
 		case BlendType::One_One: return { GL_ONE, GL_ONE, GL_ZERO, GL_ONE };
 		case BlendType::SAlpha_OneMinusSAlpha: return { GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA };
+		case BlendType::Zero_One: return { GL_ZERO, GL_ONE, GL_ZERO, GL_ONE };
 	}
 	return { GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA };
 }
@@ -264,6 +265,10 @@ const char* g_shader_postfx = {
 
 const char* g_shader_mod = {
 #include "shaders/mod.glsl.h"
+};
+
+const char* g_shader_hdtext = {
+#include "shaders/hdtext.glsl.h"
 };
 
 const std::map<uint32_t, std::pair<uint32_t, BlendType>> g_blend_types = {

@@ -69,5 +69,6 @@
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)src\graphic\shaders\mod.glsl" />
     <None Include="$(MSBuildThisFileDirectory)src\graphic\shaders\ddraw.glsl" />
+    <None Include="$(MSBuildThisFileDirectory)src\graphic\shaders\hdtext.glsl" />
   </ItemGroup>
 </Project>

@@ -284,7 +284,7 @@ bool HDText::drawText(const wchar_t* str, int x, int y, uint32_t color, uint32_t
 	}
 	// Median XL (D2Sigma) draws ground names as DrawSolidRect + DrawNormalText on the UI pass.
 	// Keep that HD text in the game framebuffer so later inventory/HUD sprites cover it.
-	const bool ingame_hd = (App.game.screen == GameScreen::InGame && App.game.draw_stage != DrawStage::Map && App.game.draw_stage != DrawStage::Map2 && !map_text);
+	const bool ingame_hd = useInGamePass() && !map_text;
 	if (ingame_hd)
 		App.context->toggleInGamePush(true);
 
@@ -405,9 +405,10 @@ bool HDText::drawFramedText(const wchar_t* str, int x, int y, uint32_t color, ui
 	else if (pos.y < margin)
 		pos.y = margin;
 
-	if (ground_item)
+	const bool ingame_hd = ground_item && useInGamePass();
+	if (ingame_hd)
 		App.context->toggleInGamePush(true);
-	else
+	else if (!ground_item)
 		App.context->toggleDelayPush(true);
 	m_object_bg->setPosition(pos);
 	m_object_bg->setSize(box_size);
@@ -420,10 +421,10 @@ bool HDText::drawFramedText(const wchar_t* str, int x, int y, uint32_t color, ui
 	font->setMasking(false);
 	font->setAlign(TextAlign::Center);
 	font->drawText(str, pos + padding, text_color, true);
-	if (ground_item) {
+	if (ingame_hd) {
 		App.context->toggleInGamePush(false);
 		App.context->flushInGameHD();
-	} else
+	} else if (!ground_item)
 		App.context->toggleDelayPush(false);
 
 	return true;
@@ -484,7 +485,8 @@ bool HDText::drawRectangledText(const wchar_t* str, int x, int y, uint32_t rect_
 	}
 
 	const bool item_label = (rect_transparency != 2);
-	if (item_label)
+	const bool ingame_hd = item_label && useInGamePass();
+	if (ingame_hd)
 		App.context->toggleInGamePush(true);
 
 	m_object_bg->setPosition(back_pos);
@@ -497,7 +499,7 @@ bool HDText::drawRectangledText(const wchar_t* str, int x, int y, uint32_t rect_
 	font->setAlign(TextAlign::Center);
 	font->drawText(str, text_pos + padding, text_color, true);
 
-	if (item_label) {
+	if (ingame_hd) {
 		App.context->toggleInGamePush(false);
 		App.context->flushInGameHD();
 	}
@@ -600,13 +602,13 @@ bool HDText::drawSolidRect(int left, int top, int right, int bottom, uint32_t co
 	} else
 		m_object_bg->setFlags(2);
 
-	const bool ingame_hd = (App.game.draw_stage != DrawStage::Map && App.game.draw_stage != DrawStage::Map2);
+	const bool ingame_hd = useInGamePass();
 	if (ingame_hd)
 		App.context->toggleInGamePush(true);
 	App.context->pushObject(m_object_bg);
 	if (ingame_hd) {
 		App.context->toggleInGamePush(false);
-		App.context->flushInGameHD();
+		App.context->flushInGameHD(false);
 	}
 
 	return true;
@@ -874,7 +876,7 @@ void HDText::drawRectFrame()
 	App.context->pushObject(m_object_bg);
 	if (ingame_hd) {
 		App.context->toggleInGamePush(false);
-		App.context->flushInGameHD();
+		App.context->flushInGameHD(false);
 	}
 }
 

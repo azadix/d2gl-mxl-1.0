@@ -79,6 +79,12 @@ public:
 	}
 
 	inline bool isActive() { return App.hd_text.active; }
+	inline bool useInGamePass()
+	{
+		return App.game.screen == GameScreen::InGame
+			&& App.game.draw_stage != DrawStage::Map
+			&& App.game.draw_stage != DrawStage::Map2;
+	}
 	inline void setMVP(const glm::mat4& mvp) { m_mvp = mvp; }
 
 	void reset();

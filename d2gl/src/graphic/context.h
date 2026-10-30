@@ -44,6 +44,7 @@ namespace d2gl {
 #define TEXTURE_SLOT_PREFX 4
 #define TEXTURE_SLOT_BLOOM1 5
 #define TEXTURE_SLOT_BLOOM2 6
+#define TEXTURE_SLOT_HDTEXT 7
 
 #define TEXTURE_SLOT_LUT 11
 #define TEXTURE_SLOT_CURSOR 12
@@ -147,6 +148,7 @@ class Context {
 	std::unique_ptr<Pipeline> m_fxaa_compute_pipeline;
 
 	std::unique_ptr<Pipeline> m_mod_pipeline;
+	std::unique_ptr<Pipeline> m_hdtext_pipeline;
 	int m_current_shader = -1;
 
 	// Glide only
@@ -197,7 +199,7 @@ public:
 	inline void toggleInGamePush(bool ingame) { m_ingame_push = ingame; }
 	void pushObject(const std::unique_ptr<Object>& object);
 	void appendDelayedObjects();
-	void flushInGameHD();
+	void flushInGameHD(bool hd_layer = true);
 
 	inline void setVertexColor(uint32_t color) { m_vertex_params.color = color; }
 	inline void setVertexTexShift(uint8_t shift) { m_vertex_params.tex_shift = shift; }

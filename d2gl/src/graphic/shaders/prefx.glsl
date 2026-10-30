@@ -43,6 +43,7 @@ void main()
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out vec4 FragColorMap;
 layout(location = 2) out vec4 FragColorMask;
+layout(location = 3) out vec4 FragColorHD;
 
 layout(std140) uniform ubo_Metrics {
 	float u_BloomExp;
@@ -147,6 +148,7 @@ void main()
 
 	FragColorMap = vec4(0.0);
 	FragColorMask = vec4(0.0);
+	FragColorHD = vec4(0.0);
 }
 
 // =============================================================

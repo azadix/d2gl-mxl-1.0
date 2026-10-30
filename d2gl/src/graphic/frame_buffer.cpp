@@ -110,4 +110,10 @@ void FrameBuffer::setDrawBuffers(uint32_t count)
 	delete[] attachments;
 }
 
+void FrameBuffer::setDrawBuffer(uint32_t index)
+{
+	GLenum attachment = GL_COLOR_ATTACHMENT0 + index;
+	glDrawBuffers(1, &attachment);
+}
+
 }

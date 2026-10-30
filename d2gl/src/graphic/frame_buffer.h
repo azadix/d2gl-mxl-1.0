@@ -48,6 +48,7 @@ public:
 	void bind(bool clear = true);
 	static void unBind();
 	static void setDrawBuffers(uint32_t count);
+	static void setDrawBuffer(uint32_t index);
 
 	inline const GLuint getId() const { return m_id; }
 	inline Texture* getTexture(uint32_t index = 0) { return m_textures[index].get(); }

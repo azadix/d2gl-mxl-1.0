@@ -16,13 +16,11 @@ enum class CommandType {
 
 struct Command {
 	CommandType type = CommandType::None;
-	union {
-		uint32_t index = 0;
-		struct {
-			uint32_t start;
-			uint32_t count;
-		} draw;
-	};
+	uint32_t index = 0;
+	struct {
+		uint32_t start;
+		uint32_t count;
+	} draw;
 };
 
 struct TexData {
@@ -96,7 +94,7 @@ public:
 
 	void pushCommand(CommandType type, uint32_t index = 0);
 	void drawIndexed(uint32_t start, uint32_t count);
-	void drawModInGame(uint32_t start, uint32_t count);
+	void drawModInGame(uint32_t start, uint32_t count, uint32_t attachment = 0);
 	void resize();
 
 	void colorUpdate(UBOType type, const void* data);

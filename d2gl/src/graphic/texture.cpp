@@ -71,6 +71,16 @@ void Texture::bind(bool force)
 	}
 }
 
+void Texture::unbind()
+{
+	if (active_texture_slot != m_slot) {
+		glActiveTexture(GL_TEXTURE0 + m_slot);
+		active_texture_slot = m_slot;
+	}
+	glBindTexture(m_target, 0);
+	current_binded_texture[m_slot] = UINT32_MAX;
+}
+
 void Texture::bindImage(uint32_t unit)
 {
 	glBindImageTexture(unit, m_id, 0, GL_FALSE, 0, GL_WRITE_ONLY, m_internal_format);

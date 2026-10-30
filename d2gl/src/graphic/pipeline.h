@@ -43,6 +43,7 @@ enum class BlendType : int8_t {
 	Zero_SColor,
 	One_One,
 	SAlpha_OneMinusSAlpha,
+	Zero_One,
 };
 
 struct BindingInfo {
@@ -125,6 +126,7 @@ extern const char* g_shader_movie;
 extern const char* g_shader_prefx;
 extern const char* g_shader_postfx;
 extern const char* g_shader_mod;
+extern const char* g_shader_hdtext;
 extern const std::vector<UpscaleShader> g_shader_upscale;
 
 extern const std::map<uint32_t, std::pair<uint32_t, BlendType>> g_blend_types;

@@ -360,11 +360,18 @@ void Menu::draw()
 				d2::patch_hd_text->toggle(App.hd_text.active);
 				saveBool("Feature", "hd_text", App.hd_text.active);
 			}
-			ImGui::BeginDisabled(!App.hd_text.active || ISHDTEXT());
-				drawSlider_m(float, "", App.hd_text.scale, "%.3f", "Global scale for HD text.", hd_text_scale)
-					saveFloat("Feature", "hd_text_scale", App.hd_text.scale.value);
-				if (App.hd_text.active)
-					modules::HDText::Instance().updateFontSize();
+			ImGui::BeginDisabled(!App.hd_text.active);
+				ImGui::BeginDisabled(ISHDTEXT());
+					drawSlider_m(float, "", App.hd_text.scale, "%.3f", "Global scale for HD text.", hd_text_scale)
+						saveFloat("Feature", "hd_text_scale", App.hd_text.scale.value);
+					if (App.hd_text.active)
+						modules::HDText::Instance().updateFontSize();
+				ImGui::EndDisabled();
+				ImGui::Spacing();
+				ImGui::Spacing();
+				ImGui::SameLine(20.0f);
+				drawCheckbox_m("Apply graphical filter to text", App.hd_text.apply_filters, "On: shaders and color grading affect HD text. Off: sharp labels, still covered by HUD.", hd_text_apply_filters)
+					saveBool("Feature", "hd_text_apply_filters", App.hd_text.apply_filters);
 			ImGui::EndDisabled();
 			drawSeparator();
 			ImGui::BeginDisabled(!ISGLIDE3X() || !App.mini_map.available);

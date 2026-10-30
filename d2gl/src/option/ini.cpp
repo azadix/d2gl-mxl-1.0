@@ -221,7 +221,8 @@ void saveIni()
 		"hd_cursor=%s\n\n"
 		"; HD in game text.\n"
 		"hd_text=%s\n"
-		"hd_text_scale=%.3f\n\n"
+		"hd_text_scale=%.3f\n"
+		"hd_text_apply_filters=%s\n\n"
 		//"; HD life & mana orbs.\n"
 		//"hd_orbs=%s\n"
 		//"hd_orbs_centered=%s\n\n"
@@ -247,6 +248,7 @@ void saveIni()
 		boolString(App.hd_cursor),
 		boolString(App.hd_text.active),
 		App.hd_text.scale.value,
+		boolString(App.hd_text.apply_filters),
 		// boolString(App.hd_orbs.active),
 		// boolString(App.hd_orbs.centered),
 		boolString(App.mini_map.active),
@@ -345,6 +347,7 @@ void loadIni()
 		App.hd_cursor = getBool("Feature", "hd_cursor", App.hd_cursor);
 		App.hd_text.active = getBool("Feature", "hd_text", App.hd_text.active);
 		App.hd_text.scale.value = ISHDTEXT() ? 1.0f : getFloat("Feature", "hd_text_scale", App.hd_text.scale);
+		App.hd_text.apply_filters = getBool("Feature", "hd_text_apply_filters", App.hd_text.apply_filters);
 
 		// App.hd_orbs.active = getBool("Feature", "hd_orbs", App.hd_orbs.active);
 		// App.hd_orbs.centered = getBool("Feature", "hd_orbs_centered", App.hd_orbs.centered);

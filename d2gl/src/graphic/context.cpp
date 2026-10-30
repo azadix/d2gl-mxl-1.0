@@ -35,6 +35,11 @@
 namespace d2gl {
 
 bool automapenabled;
+
+static bool useHDTextLayer()
+{
+	return ISGLIDE3X() && App.hd_text.active && !App.hd_text.apply_filters;
+}
 Context::Context()
 {
 	PIXELFORMATDESCRIPTOR pfd;
@@ -214,6 +219,8 @@ Context::Context()
 	}
 	m_mod_pipeline = Context::createPipeline(mod_pipeline_ci);
 	m_mod_pipeline->setUniform1i("u_IsGlide", ISGLIDE3X());
+	if (ISGLIDE3X())
+		m_mod_pipeline->setUniform1i("u_HDTextTexture", TEXTURE_SLOT_HDTEXT);
 
 	if (ISGLIDE3X()) {
 		TextureCreateInfo glide_texture_ci;
@@ -240,9 +247,20 @@ Context::Context()
 			{ BindingType::Texture, "u_Texture", TEXTURE_SLOT_DEFAULT, &m_glide_texture },
 		};
 		game_pipeline_ci.attachment_blends.clear();
-		for (auto& blend : g_blend_types)
-			game_pipeline_ci.attachment_blends.push_back({ blend.second.second, BlendType::SAlpha_OneMinusSAlpha, BlendType::SAlpha_OneMinusSAlpha });
+		for (auto& blend : g_blend_types) {
+			const auto hd_punch = (blend.second.second == BlendType::One_Zero) ? BlendType::One_Zero : BlendType::Zero_One;
+			game_pipeline_ci.attachment_blends.push_back({ blend.second.second, BlendType::SAlpha_OneMinusSAlpha, BlendType::SAlpha_OneMinusSAlpha, hd_punch });
+		}
 		m_game_pipeline = Context::createPipeline(game_pipeline_ci);
+
+		PipelineCreateInfo hdtext_pipeline_ci = { "hdtext" };
+		hdtext_pipeline_ci.shader = g_shader_hdtext;
+		hdtext_pipeline_ci.attachment_blends = { { BlendType::SAlpha_OneMinusSAlpha } };
+		hdtext_pipeline_ci.bindings = {
+			{ BindingType::FBTexture, "u_Texture", TEXTURE_SLOT_HDTEXT, &m_game_framebuffer, 3 },
+		};
+		m_hdtext_pipeline = Context::createPipeline(hdtext_pipeline_ci);
+		m_hdtext_pipeline->setUniformMat4f("u_MVP", glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f));
 
 		TextureCreateInfo lut_texture_ci;
 		lut_texture_ci.size = { 1024, 32 };
@@ -417,11 +435,24 @@ void Context::renderThread(void* context)
 					break;
 				case CommandType::DrawModInGame:
 					if (command->draw.count > 0) {
-						FrameBuffer::setDrawBuffers(1);
+						const bool hd_layer = useHDTextLayer() && command->index == 3;
+						if (hd_layer)
+							FrameBuffer::setDrawBuffer(3);
+						else
+							FrameBuffer::setDrawBuffers(1);
 						ctx->bindPipeline(ctx->m_mod_pipeline);
+						if (hd_layer) {
+							ctx->m_game_framebuffer->getTexture(3)->unbind();
+							ctx->m_mod_pipeline->setUniformVec2f("u_Scale", { 1.0f, 1.0f });
+							ctx->m_mod_pipeline->setUniform1i("u_GameResPass", 1);
+						}
 						glBindBuffer(GL_ARRAY_BUFFER, ctx->m_vertex_mod_buffer);
 						VertexMod::bindingDescription();
 						glDrawElementsBaseVertex(GL_TRIANGLES, command->draw.count, GL_UNSIGNED_INT, 0, command->draw.start);
+						if (hd_layer) {
+							ctx->m_mod_pipeline->setUniform1i("u_GameResPass", 0);
+							ctx->m_mod_pipeline->setUniformVec2f("u_Scale", App.viewport.scale);
+						}
 						glBindBuffer(GL_ARRAY_BUFFER, ctx->m_vertex_buffer);
 						Vertex::bindingDescription();
 						if (ctx->m_game_framebuffer)
@@ -460,8 +491,8 @@ void Context::renderThread(void* context)
 						ctx->bindFrameBuffer(ctx->m_game_framebuffer, false);
 						ctx->setViewport(cmd->m_game_size);
 						ctx->bindPipeline(ctx->m_prefx_pipeline);
-						FrameBuffer::setDrawBuffers(1);
 					}
+					FrameBuffer::setDrawBuffers(1);
 					ctx->drawQuad(3 + App.bloom.active, 0, App.lut.selected);
 
 					ctx->bindPipeline(ctx->m_game_pipeline, command->index);
@@ -527,6 +558,18 @@ void Context::renderThread(void* context)
 							ctx->setViewport(vp_size, vp_offset);
 							ctx->bindPipeline(ctx->m_postfx_pipeline);
 							ctx->drawQuad(2 + App.gl_caps.compute_shader, App.fxaa.presets.selected);
+						}
+
+						if (useHDTextLayer() && cmd->m_vertex_mod_ingame_count) {
+							ctx->m_game_framebuffer->getTexture(3)->bind(true);
+							glBindBuffer(GL_ARRAY_BUFFER, ctx->m_vertex_mod_buffer);
+							ctx->bindPipeline(ctx->m_mod_pipeline);
+							ctx->m_mod_pipeline->setUniform1i("u_HDOcclude", 1);
+							VertexMod::bindingDescription();
+							glDrawElements(GL_TRIANGLES, cmd->m_vertex_mod_ingame_count / 4 * 6, GL_UNSIGNED_INT, 0);
+							ctx->m_mod_pipeline->setUniform1i("u_HDOcclude", 0);
+							glBindBuffer(GL_ARRAY_BUFFER, ctx->m_vertex_buffer);
+							Vertex::bindingDescription();
 						}
 					}
 					break;
@@ -597,6 +640,7 @@ void Context::onResize(glm::uvec2 w_size, glm::uvec2 g_size, uint32_t bpp)
 				{ TEXTURE_SLOT_GAME, { 0.0f, 0.0f, 0.0f, 1.0f }, { GL_LINEAR, GL_LINEAR } },
 				{ TEXTURE_SLOT_MAP, { 0.0f, 0.0f, 0.0f, 0.0f } },
 				{ TEXTURE_SLOT_MASK, { 0.0f, 0.0f, 0.0f, 0.0f }, { GL_LINEAR, GL_LINEAR }, { GL_R8, GL_RED } },
+				{ TEXTURE_SLOT_HDTEXT, { 0.0f, 0.0f, 0.0f, 0.0f }, { GL_LINEAR, GL_LINEAR } },
 			};
 		else
 			frambuffer_ci.attachments = { { TEXTURE_SLOT_GAME } };
@@ -916,13 +960,14 @@ void Context::pushObject(const std::unique_ptr<Object>& object)
 	m_frame.vertex_count += 4;
 }
 
-void Context::flushInGameHD()
+void Context::flushInGameHD(bool hd_layer)
 {
 	if (m_vertices_ingame.count <= m_ingame_submitted)
 		return;
 
 	flushVertices();
-	m_command_buffer[m_frame_index].drawModInGame(m_ingame_submitted, m_vertices_ingame.count - m_ingame_submitted);
+	const uint32_t attachment = (hd_layer && useHDTextLayer()) ? 3 : 0;
+	m_command_buffer[m_frame_index].drawModInGame(m_ingame_submitted, m_vertices_ingame.count - m_ingame_submitted, attachment);
 	m_command_buffer[m_frame_index].pushCommand(CommandType::SetBlendState, m_current_blend_index);
 	m_ingame_submitted = m_vertices_ingame.count;
 	m_frame.drawcall_count++;

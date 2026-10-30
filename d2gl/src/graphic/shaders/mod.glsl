@@ -57,6 +57,7 @@ uniform sampler2D u_MapTexture;
 uniform sampler2DArray u_CursorTexture;
 uniform sampler2DArray u_FontTexture;
 uniform sampler2D u_MaskTexture;
+uniform sampler2D u_HDTextTexture;
 
 in vec4 v_Position;
 in vec2 v_TexCoord;
@@ -71,6 +72,8 @@ uniform vec4 u_TextMask;
 uniform vec4 u_Viewport;
 uniform bool u_IsMasking = false;
 uniform bool u_IsGlide = true;
+uniform bool u_GameResPass = false;
+uniform bool u_HDOcclude = false;
 
 float msdf(vec3 rgb, float smoothess, float weight)
 {
@@ -87,6 +90,11 @@ vec3 greyscale(vec3 color, float str)
 
 void main()
 {
+	if (u_IsGlide && u_GameResPass) {
+		FragColor = vec4(1.0);
+		return;
+	}
+
 	switch(v_Flags.x) {
 		case 1u: FragColor = texture(u_CursorTexture, vec3(v_TexCoord, v_TexIds.x)) * v_Color1; break;
 		case 2u: FragColor = v_Color1; break;
@@ -168,8 +176,14 @@ void main()
 			FragColor.a *= (float(v_Flags.z) * 0.01);
 	}
 
-	if (u_IsGlide && texture(u_MaskTexture, (gl_FragCoord.xy - u_Viewport.xy) / u_Viewport.zw).r > 0.1)
+	if (u_IsGlide && !u_GameResPass && texture(u_MaskTexture, (gl_FragCoord.xy - u_Viewport.xy) / u_Viewport.zw).r > 0.1)
 		FragColor.a = 0.0;
+
+	if (u_IsGlide && u_HDOcclude) {
+		vec2 uv = (gl_FragCoord.xy - u_Viewport.xy) / u_Viewport.zw;
+		if (texture(u_HDTextTexture, uv).a < 0.05)
+			FragColor.a = 0.0;
+	}
 }
 
 #endif

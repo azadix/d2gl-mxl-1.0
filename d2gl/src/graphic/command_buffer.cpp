@@ -55,11 +55,12 @@ void CommandBuffer::drawIndexed(uint32_t start, uint32_t count)
 	next();
 }
 
-void CommandBuffer::drawModInGame(uint32_t start, uint32_t count)
+void CommandBuffer::drawModInGame(uint32_t start, uint32_t count, uint32_t attachment)
 {
 	m_command->type = CommandType::DrawModInGame;
 	m_command->draw.start = start;
 	m_command->draw.count = count / 4 * 6;
+	m_command->index = attachment;
 	next();
 }
 
