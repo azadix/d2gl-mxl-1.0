@@ -254,20 +254,6 @@ bool HDText::drawText(const wchar_t* str, int x, int y, uint32_t color, uint32_t
 		}
 	}
 
-	if (m_text_size == 13 && (x == 15 || (*d2::screen_shift == SCREENPANEL_LEFT && x == App.game.size.x / 2 + 15))) {
-		auto size = font->getTextSize(str);
-		size.y = size.y / 2;
-		const glm::vec2 padding = { 4.0f, 2.0f };
-		glm::vec2 back_pos = { pos.x, pos.y - size.y };
-
-		m_object_bg->setFlags(2);
-		m_object_bg->setPosition(back_pos - padding);
-		m_object_bg->setSize(size + padding * 2.0f);
-		m_object_bg->setColor(m_alt_bg_color, 1);
-		App.context->pushObject(m_object_bg);
-		font->setShadow(2);
-	}
-
 	if (App.game.draw_stage != DrawStage::Map && App.game.screen != GameScreen::Menu && y < 650)
 		if (m_text_size == 6 && *d2::screen_shift > SCREENPANEL_RIGHT)
 			pos.x += 4.0f;
@@ -282,9 +268,10 @@ bool HDText::drawText(const wchar_t* str, int x, int y, uint32_t color, uint32_t
 			case 2: font->setOpacity(0.75f); break;
 		}
 	}
-	// Median XL (D2Sigma) draws ground names as DrawSolidRect + DrawNormalText on the UI pass.
-	// Keep that HD text in the game framebuffer so later inventory/HUD sprites cover it.
-	const bool ingame_hd = useInGamePass() && !map_text;
+	// Only ground-loot names belong in the game framebuffer (so inventory covers
+	// them). Chat, NPC dialogs and other HUD text stay on the overlay.
+	const bool ingame_hd = useInGamePass() && !map_text
+		&& modules::MotionPrediction::Instance().isGroundLootLabel(x, y);
 	if (ingame_hd)
 		App.context->toggleInGamePush(true);
 
@@ -577,9 +564,6 @@ bool HDText::drawSolidRect(int left, int top, int right, int bottom, uint32_t co
 	if (draw_mode == 5)
 		return false;
 
-	if (draw_mode == 1 && height == 16 && (left == 11 || left == 10 || (*d2::screen_shift == SCREENPANEL_LEFT && left == App.game.size.x / 2 + 10))) // message bg
-		return true;
-
 	uint32_t bg_color = 0x000000FF;
 	switch (draw_mode) {
 		case 0: bg_color = 0x00000066; break;
@@ -606,7 +590,8 @@ bool HDText::drawSolidRect(int left, int top, int right, int bottom, uint32_t co
 	} else
 		m_object_bg->setFlags(2);
 
-	const bool ingame_hd = useInGamePass();
+	const bool ingame_hd = useInGamePass()
+		&& modules::MotionPrediction::Instance().isLootNameplateRect(left, top, right, bottom);
 	if (ingame_hd)
 		App.context->toggleInGamePush(true);
 	App.context->pushObject(m_object_bg);

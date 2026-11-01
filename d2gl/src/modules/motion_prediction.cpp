@@ -296,13 +296,15 @@ glm::ivec2 MotionPrediction::drawText(const wchar_t* str, int x, int y, D2DrawFn
 	}
 
 	if (fn == D2DrawFn::NormalText || fn == D2DrawFn::NormalTextEx) {
-		const bool loot_name = textNearLootNameplate(x, y);
-		const bool world_label = (App.game.draw_stage == DrawStage::World) && isWorldAnchoredUiLabel(x, y, str);
-		if (loot_name || world_label) {
-			if (m_alt_item_offset_applied)
-				m_alt_item_offset_applied = false;
-			else
-				pos -= m_global_offset;
+		if (!isChatLogText(x)) {
+			const bool loot_name = textNearLootNameplate(x, y);
+			const bool world_label = (App.game.draw_stage == DrawStage::World) && isWorldAnchoredUiLabel(x, y, str);
+			if (loot_name || world_label) {
+				if (m_alt_item_offset_applied)
+					m_alt_item_offset_applied = false;
+				else
+					pos -= m_global_offset;
+			}
 		}
 	}
 
@@ -381,6 +383,11 @@ bool MotionPrediction::isLootNameplateRect(int left, int top, int right, int bot
 		return false;
 	if (width > (int)App.game.size.x / 2)
 		return false;
+	// Chat / message log backgrounds (left-aligned one-line strips).
+	if (left <= 80 && height >= 10 && height <= 24)
+		return false;
+	if (height == 16 && (left == 10 || left == 11 || (*d2::screen_shift == SCREENPANEL_LEFT && left == (int)App.game.size.x / 2 + 10)))
+		return false;
 	// Hireling / summon HP under the left portraits.
 	if (height <= 24 && width <= 100 && left < 130)
 		return false;
@@ -407,6 +414,22 @@ bool MotionPrediction::textNearLootNameplate(int x, int y)
 		return false;
 	return x >= m_loot_nameplate_l - 24 && x <= m_loot_nameplate_r + 24
 		&& y >= m_loot_nameplate_t - 8 && y <= m_loot_nameplate_b + 28;
+}
+
+bool MotionPrediction::isGroundLootLabel(int x, int y)
+{
+	return textNearLootNameplate(x, y);
+}
+
+bool MotionPrediction::isChatLogText(int x)
+{
+	if (modules::HDText::Instance().getTextSize() == 13)
+		return true;
+	if (x == 15 || x == 10 || x == 11)
+		return true;
+	if (*d2::screen_shift == SCREENPANEL_LEFT && x == (int)App.game.size.x / 2 + 15)
+		return true;
+	return false;
 }
 
 bool MotionPrediction::isWorldAnchoredUiLabel(int x, int y, const wchar_t* str)

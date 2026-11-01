@@ -93,14 +93,16 @@ public:
 	void altItemsTextMotion();
 
 	inline void textMotion(D2DrawFn fn) { m_text_fn = fn; }
+	bool isLootNameplateRect(int left, int top, int right, int bottom);
+	bool isGroundLootLabel(int x, int y);
 
 private:
 	void setUnitMotion(UnitMotion* unit_motion, int32_t delta);
 	glm::ivec2 getUnitOffset(UnitMotion* unit_motion);
 	bool isWorldAnchoredUiLabel(int x, int y, const wchar_t* str = nullptr);
 	bool isHudMotionStage();
-	bool isLootNameplateRect(int left, int top, int right, int bottom);
 	bool textNearLootNameplate(int x, int y);
+	bool isChatLogText(int x);
 
 	inline bool isAvailable() { return m_active && App.game.screen == GameScreen::InGame; }
 };
