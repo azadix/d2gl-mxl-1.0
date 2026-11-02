@@ -379,9 +379,12 @@ bool MotionPrediction::isLootNameplateRect(int left, int top, int right, int bot
 
 	const int width = right - left;
 	const int height = bottom - top;
-	if (height < 10 || height > 56 || width < 16 || width > 480)
+	if (height < 10 || height > 40 || width < 24 || width > 420)
 		return false;
 	if (width > (int)App.game.size.x / 2)
+		return false;
+	// Loot nameplates are wide relative to height; skip checkbox/panel squares.
+	if (width < height * 2)
 		return false;
 	// Chat / message log backgrounds (left-aligned one-line strips).
 	if (left <= 80 && height >= 10 && height <= 24)
@@ -392,7 +395,6 @@ bool MotionPrediction::isLootNameplateRect(int left, int top, int right, int bot
 	if (height <= 24 && width <= 100 && left < 130)
 		return false;
 	// Square-ish black plate behind merc/minion portraits (left HUD stack).
-	// Loot nameplates are wide; portrait backing is about as tall as it is wide.
 	if (left < 180 && top < 450 && width <= 110 && height >= 28 && width <= height + 20)
 		return false;
 

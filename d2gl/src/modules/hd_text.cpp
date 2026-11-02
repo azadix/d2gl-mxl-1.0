@@ -268,10 +268,11 @@ bool HDText::drawText(const wchar_t* str, int x, int y, uint32_t color, uint32_t
 			case 2: font->setOpacity(0.75f); break;
 		}
 	}
-	// Only ground-loot names belong in the game framebuffer (so inventory covers
-	// them). Chat, NPC dialogs and other HUD text stay on the overlay.
-	const bool ingame_hd = useInGamePass() && !map_text
-		&& modules::MotionPrediction::Instance().isGroundLootLabel(x, y);
+	// In-game HD text goes through the game pass. Ground-loot names use the HD
+	// text layer (sharp, punched by later HUD). Filter/chat/UI text must flush
+	// into the game color buffer so headers and modals cover scrolled rows.
+	const bool ingame_hd = useInGamePass() && !map_text;
+	const bool loot_label = ingame_hd && modules::MotionPrediction::Instance().isGroundLootLabel(x, y);
 	if (ingame_hd)
 		App.context->toggleInGamePush(true);
 
@@ -282,7 +283,7 @@ bool HDText::drawText(const wchar_t* str, int x, int y, uint32_t color, uint32_t
 
 	if (ingame_hd) {
 		App.context->toggleInGamePush(false);
-		App.context->flushInGameHD();
+		App.context->flushInGameHD(loot_label);
 	}
 
 	if (map_text) {
@@ -590,8 +591,7 @@ bool HDText::drawSolidRect(int left, int top, int right, int bottom, uint32_t co
 	} else
 		m_object_bg->setFlags(2);
 
-	const bool ingame_hd = useInGamePass()
-		&& modules::MotionPrediction::Instance().isLootNameplateRect(left, top, right, bottom);
+	const bool ingame_hd = useInGamePass();
 	if (ingame_hd)
 		App.context->toggleInGamePush(true);
 	App.context->pushObject(m_object_bg);
