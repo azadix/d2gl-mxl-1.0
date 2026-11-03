@@ -839,7 +839,10 @@ void HDText::drawRectFrame()
 		return;
 
 	auto rect = d2::currently_drawing_rect;
-	glm::vec2 pos = { (float)rect->left, (float)rect->top };
+	// Keep the frame aligned with the plate it was drawn for: if the plate was
+	// shifted by motion prediction the border has to move with it.
+	const auto frame_offset = modules::MotionPrediction::Instance().getFrameRectOffset(rect->left, rect->top, rect->right, rect->bottom);
+	glm::vec2 pos = { (float)(rect->left - frame_offset.x), (float)(rect->top - frame_offset.y) };
 	glm::vec2 size = { (float)(rect->right - rect->left + 1), (float)(rect->bottom - rect->top + 1) };
 
 	if (rect->top == 6 && rect->right - rect->left == 327) // talking text
