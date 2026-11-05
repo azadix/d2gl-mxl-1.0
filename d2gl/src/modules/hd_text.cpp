@@ -26,6 +26,15 @@
 
 namespace d2gl::modules {
 
+// Same condition as Context::useHDTextLayer(): when the "apply graphical filter"
+// option is off the in game text goes to the HD layer, which is composited after
+// the post processing pass, so it stays sharp. With the option on it is drawn
+// into the game buffer and gets the shaders/color grading like the rest of the game.
+static bool useHdLayer()
+{
+	return ISGLIDE3X() && App.hd_text.active && !App.hd_text.apply_filters;
+}
+
 HDText::HDText()
 {
 	m_lang_id = d2::getLangId();
@@ -283,7 +292,7 @@ bool HDText::drawText(const wchar_t* str, int x, int y, uint32_t color, uint32_t
 
 	if (ingame_hd) {
 		App.context->toggleInGamePush(false);
-		App.context->flushInGameHD(loot_label);
+		App.context->flushInGameHD(loot_label || useHdLayer());
 	}
 
 	if (map_text) {
@@ -415,7 +424,7 @@ bool HDText::drawFramedText(const wchar_t* str, int x, int y, uint32_t color, ui
 	font->drawText(str, pos + padding, text_color, true);
 	if (ingame_hd) {
 		App.context->toggleInGamePush(false);
-		App.context->flushInGameHD();
+		App.context->flushInGameHD(useHdLayer());
 	} else if (!ground_item)
 		App.context->toggleDelayPush(false);
 
@@ -493,7 +502,7 @@ bool HDText::drawRectangledText(const wchar_t* str, int x, int y, uint32_t rect_
 
 	if (ingame_hd) {
 		App.context->toggleInGamePush(false);
-		App.context->flushInGameHD();
+		App.context->flushInGameHD(useHdLayer());
 	}
 
 	return true;
