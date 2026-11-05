@@ -485,19 +485,6 @@ void Menu::draw()
 		ImGui::EndTabBar();
 	}
 	ImGui::PopFont();
-	if (active_tab != 3) {
-		ImGui::SetCursorPos({ 16.0f, 500.0f });
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 0.0f, 0.0f });
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-		ImGui::BeginChildFrame(ImGui::GetID("#wiki"), { 300.0f, 24.0f }, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground);
-		ImGui::PopStyleVar(3);
-		ImGui::PushFont(m_fonts[15]);
-		if (ImGui::Button(" Open Configuration Wiki Page > "))
-			ShellExecute(0, 0, L"https://github.com/bayaraa/d2gl/wiki/Configuration", 0, 0, SW_SHOW);
-		ImGui::PopFont();
-		ImGui::EndChildFrame();
-	}
 	ImGui::End();
 
 	// clang-format on
