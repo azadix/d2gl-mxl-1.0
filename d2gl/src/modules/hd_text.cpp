@@ -835,13 +835,27 @@ bool HDText::drawShiftedImage(d2::CellContext* cell, int x, int y)
 
 void HDText::drawRectFrame()
 {
-	if (!isActive() || !d2::currently_drawing_rect)
+	if (!d2::currently_drawing_rect)
 		return;
 
 	auto rect = d2::currently_drawing_rect;
 	// Keep the frame aligned with the plate it was drawn for: if the plate was
 	// shifted by motion prediction the border has to move with it.
 	const auto frame_offset = modules::MotionPrediction::Instance().getFrameRectOffset(rect->left, rect->top, rect->right, rect->bottom);
+
+	if (!isActive()) {
+		// HD text is off, so the game draws this frame itself right after this
+		// stub. Move the rect it is about to draw so the border stays on its
+		// (shifted) plate instead of being left behind.
+		if (frame_offset != glm::ivec2(0, 0)) {
+			rect->left -= frame_offset.x;
+			rect->right -= frame_offset.x;
+			rect->top -= frame_offset.y;
+			rect->bottom -= frame_offset.y;
+		}
+		return;
+	}
+
 	glm::vec2 pos = { (float)(rect->left - frame_offset.x), (float)(rect->top - frame_offset.y) };
 	glm::vec2 size = { (float)(rect->right - rect->left + 1), (float)(rect->bottom - rect->top + 1) };
 

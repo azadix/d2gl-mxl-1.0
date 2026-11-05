@@ -82,8 +82,6 @@ class MotionPrediction {
 	std::vector<glm::ivec2> m_image_pos_prev;
 	std::vector<glm::ivec2> m_image_pos_cur;
 
-	std::unordered_set<uint64_t> m_text_keys_prev;
-	std::unordered_set<uint64_t> m_text_keys_cur;
 	std::unordered_set<uint64_t> m_rect_keys_prev;
 	std::unordered_set<uint64_t> m_rect_keys_cur;
 
@@ -93,9 +91,17 @@ class MotionPrediction {
 		uint32_t frame = 0;
 		bool world = false;
 	};
-	std::unordered_map<uint64_t, DrawState> m_text_state;
 	std::unordered_map<uint64_t, DrawState> m_rect_state;
 	std::unordered_map<uint64_t, glm::ivec2> m_frame_rect_offsets;
+
+	// Same, but followed per string (hash) and only promoted to world when the
+	// text has been seen moving by exactly the camera step.
+	struct TextAnchor {
+		uint32_t frame = 0;
+		glm::ivec2 pos = { 0, 0 };
+		bool world = false;
+	};
+	std::unordered_map<uint32_t, TextAnchor> m_text_anchors;
 
 	std::array<ParticleMotion, 512> m_particles;
 	uint32_t m_last_particle_index = 0;
@@ -139,7 +145,7 @@ private:
 	void updateWorldScroll();
 	void measureCameraStep();
 	glm::ivec2 getCameraStep();
-	bool isWorldAnchoredText(int x, int y);
+	bool isWorldAnchoredText(const wchar_t* str, int x, int y);
 	bool isWorldAnchoredRect(int left, int top, int right, int bottom);
 	bool checkWorldAnchored(uint64_t key, const std::unordered_set<uint64_t>& previous, std::unordered_map<uint64_t, DrawState>& state, const uint64_t* expected, int expected_count, const uint64_t* nearby, int nearby_count);
 	bool isWorldAnchoredUiLabel(int x, int y, const wchar_t* str = nullptr);

@@ -58,6 +58,15 @@ static inline uint64_t text_position_key(int x, int y)
 	return ((uint64_t)(uint16_t)(int16_t)x << 16) | (uint64_t)(uint16_t)(int16_t)y;
 }
 
+static inline uint32_t text_hash(const wchar_t* str)
+{
+	uint32_t hash = 2166136261u;
+	for (const wchar_t* c = str; *c; c++)
+		hash = (hash ^ (uint32_t)*c) * 16777619u;
+
+	return hash;
+}
+
 static inline uint64_t rect_position_key(int left, int top, int right, int bottom)
 {
 	return ((uint64_t)(uint16_t)(int16_t)left << 48) | ((uint64_t)(uint16_t)(int16_t)top << 32)
@@ -101,11 +110,9 @@ void MotionPrediction::toggle(bool active)
 	m_step_measured = false;
 	m_last_player_pos = { 0, 0 };
 	m_last_player_unit = nullptr;
-	m_text_keys_prev.clear();
-	m_text_keys_cur.clear();
 	m_rect_keys_prev.clear();
 	m_rect_keys_cur.clear();
-	m_text_state.clear();
+	m_text_anchors.clear();
 	m_rect_state.clear();
 	m_frame_rect_offsets.clear();
 	m_image_pos_prev.clear();
@@ -185,19 +192,21 @@ void MotionPrediction::updateWorldScroll()
 
 	if (player && player == m_last_player_unit && path) {
 		const glm::vec2 delta = glm::vec2(pos - m_last_player_pos) / 65536.0f;
-		const glm::vec2 scale_factors = { 32.0f / sqrtf(2.0f), 16.0f / sqrtf(2.0f) };
+		// Screen displacement of a world unit in Diablo 2 (measured against the
+		// real camera steps: 16 and 8, not 32/sqrt2 and 16/sqrt2).
+		const glm::vec2 scale_factors = { 16.0f, 8.0f };
 		const glm::vec2 screen_offset = scale_factors * glm::vec2(delta.x - delta.y, delta.x + delta.y);
 
 		// Teleport/waypoint: a huge jump is not a camera scroll.
 		if (glm::max(fabs(screen_offset.x), fabs(screen_offset.y)) < 64.0f)
 			m_world_step = { -(int)roundf(screen_offset.x), -(int)roundf(screen_offset.y) };
 		else {
-			m_text_state.clear();
+			m_text_anchors.clear();
 			m_rect_state.clear();
 		}
 	} else {
 		// New game/session: drop everything learned about world anchors.
-		m_text_state.clear();
+		m_text_anchors.clear();
 		m_rect_state.clear();
 	}
 
@@ -206,8 +215,6 @@ void MotionPrediction::updateWorldScroll()
 
 	// Rotate the per frame draw position history used to tell world anchored
 	// elements (they move with the camera) from screen space UI (it does not).
-	m_text_keys_prev.swap(m_text_keys_cur);
-	m_text_keys_cur.clear();
 	m_rect_keys_prev.swap(m_rect_keys_cur);
 	m_rect_keys_cur.clear();
 
@@ -220,9 +227,9 @@ void MotionPrediction::updateWorldScroll()
 	if (frame % 60 != 0)
 		return;
 
-	for (auto it = m_text_state.begin(); it != m_text_state.end();) {
+	for (auto it = m_text_anchors.begin(); it != m_text_anchors.end();) {
 		if (frame - it->second.frame > WORLD_ANCHOR_LIFETIME)
-			it = m_text_state.erase(it);
+			it = m_text_anchors.erase(it);
 		else
 			++it;
 	}
@@ -331,30 +338,49 @@ bool MotionPrediction::checkWorldAnchored(uint64_t key, const std::unordered_set
 	return world;
 }
 
-bool MotionPrediction::isWorldAnchoredText(int x, int y)
+bool MotionPrediction::isWorldAnchoredText(const wchar_t* str, int x, int y)
 {
-	if (!isAvailable())
+	if (!isAvailable() || !str)
 		return false;
 
-	const uint64_t key = text_position_key(x, y);
-	m_text_keys_cur.insert(key);
-
+	// Follow every string by its hash. A text is only anchored to the world once
+	// it has actually been seen moving by exactly the camera step; a screen
+	// space element keeps its position and therefore never qualifies. The old
+	// per position set match could mistake a static label for a world one (some
+	// other text happened to be drawn at position - step on the previous frame)
+	// and that wrong verdict then stuck to that position for good.
+	const uint32_t hash = text_hash(str);
+	const uint32_t frame = App.context->getFrameCount();
+	const glm::ivec2 pos = { x, y };
 	const glm::ivec2 step = getCameraStep();
-	const bool moved = step != glm::ivec2(0, 0);
 
-	uint64_t expected[(3 * 3)];
-	int expected_count = 0;
-	for (int ox = -1; ox <= 1; ox++)
-		for (int oy = -1; oy <= 1; oy++)
-			expected[expected_count++] = text_position_key(x - step.x + ox, y - step.y + oy);
+	const auto it = m_text_anchors.find(hash);
+	if (it == m_text_anchors.end()) {
+		if (m_text_anchors.size() < MAX_WORLD_ANCHORS)
+			m_text_anchors[hash] = { frame, pos, false };
+		return false;
+	}
 
-	uint64_t nearby[(7 * 7)];
-	int nearby_count = 0;
-	for (int ox = -3; ox <= 3; ox++)
-		for (int oy = -3; oy <= 3; oy++)
-			nearby[nearby_count++] = text_position_key(x + ox, y + oy);
+	TextAnchor& anchor = it->second;
+	const glm::ivec2 delta = pos - anchor.pos;
+	const int32_t dist = glm::max(abs(delta.x), abs(delta.y));
 
-	return checkWorldAnchored(key, m_text_keys_prev, m_text_state, expected, moved ? expected_count : 0, nearby, nearby_count);
+	if (dist == 0) {
+		// Drawn in the same place as last time: nothing new to learn.
+	} else if (step != glm::ivec2(0, 0) && delta == step) {
+		// It moved by exactly the camera scroll: anchored to the world.
+		anchor.world = true;
+	} else if (dist <= 3) {
+		// A pixel or two: centred text when the shown value changes width.
+	} else {
+		// Moved for another reason (layout change, or a different string that
+		// hashes the same): it is not tracking the camera.
+		anchor.world = false;
+	}
+
+	anchor.pos = pos;
+	anchor.frame = frame;
+	return anchor.world;
 }
 
 bool MotionPrediction::isWorldAnchoredRect(int left, int top, int right, int bottom)
@@ -576,11 +602,15 @@ glm::ivec2 MotionPrediction::drawText(const wchar_t* str, int x, int y, D2DrawFn
 	}
 
 	if (fn == D2DrawFn::NormalText || fn == D2DrawFn::NormalTextEx) {
-		const bool world_anchored = isWorldOffsetStage() && isWorldAnchoredText(x, y);
+		const bool world_anchored = isWorldOffsetStage() && isWorldAnchoredText(str, x, y);
 		if (!isChatLogText(x)) {
-			const bool loot_name = textNearLootNameplate(x, y);
+			// Note: the loot nameplate rule is intentionally not used here any
+			// more. A plate drawn by the game UI (character sheet rows) can match
+			// the same heuristic and then every label next to it wobbles with the
+			// motion offset. Ground labels move with the camera, so they are
+			// picked up by the verified text anchoring above.
 			const bool world_label = (App.game.draw_stage == DrawStage::World) && isWorldAnchoredUiLabel(x, y, str);
-			if (loot_name || world_label || world_anchored) {
+			if (world_label || world_anchored) {
 				if (m_alt_item_offset_applied)
 					m_alt_item_offset_applied = false;
 				else
@@ -798,16 +828,11 @@ void MotionPrediction::setUnitMotion(UnitMotion* unit_motion, int32_t delta)
 			unit_motion->corrected_pos.x += step.x;
 			unit_motion->corrected_pos.y += step.y;
 		}
-	} else {
-		// Unit stopped moving: let the predicted position fall back to the real
-		// one, otherwise the offset stays frozen and everything drawn with it
-		// (tiles, sprites, world anchored HUD) stays shifted for good.
-		const int32_t correction = 12000;
-		const int32_t one_minus_correction = 65536 - correction;
-
-		unit_motion->predicted_pos.x = (int32_t)(((int64_t)unit_motion->predicted_pos.x * one_minus_correction + (int64_t)unit_pos.x * correction) >> 16);
-		unit_motion->predicted_pos.y = (int32_t)(((int64_t)unit_motion->predicted_pos.y * one_minus_correction + (int64_t)unit_pos.y * correction) >> 16);
 	}
+	// Note: when the unit stops the predicted position is left where it is, the
+	// same way d2dx does it. Pulling it back to the real position eases out the
+	// lead the prediction had built up, which shows up as the view sliding back
+	// a few pixels when the walk ends.
 
 	unit_motion->offset_update = true;
 }
@@ -816,7 +841,12 @@ glm::ivec2 MotionPrediction::getUnitOffset(UnitMotion* unit_motion)
 {
 	if (unit_motion->offset_update) {
 		const glm::vec2 offset = { (unit_motion->predicted_pos.x - unit_motion->last_pos.x) / 65536.0f, (unit_motion->predicted_pos.y - unit_motion->last_pos.y) / 65536.0f };
-		const glm::vec2 scale_factors = { 32.0f / sqrtf(2.0f), 16.0f / sqrtf(2.0f) };
+		// Screen displacement of one world unit in Diablo 2. Measured against the
+		// real camera steps (a trace of the game's own screen positions) it is 16
+		// and 8; the d2dx values 32/sqrt2 and 16/sqrt2 are 41% larger and make
+		// every predicted offset overshoot, so the world jumps back on each
+		// camera update.
+		const glm::vec2 scale_factors = { 16.0f, 8.0f };
 		const glm::vec2 screen_offset = scale_factors * glm::vec2(offset.x - offset.y, offset.x + offset.y) + 0.5f;
 		unit_motion->offset = { (int)screen_offset.x, (int)screen_offset.y };
 		unit_motion->offset_update = false;
